@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"time"
 	"tgbot/config"
@@ -17,7 +18,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-const adminChatID = 6486655216 // Ваш Telegram chat_id
+const adminChatID = 6486655216
 
 func main() {
 	cfg, err := config.Load()
@@ -47,9 +48,14 @@ func main() {
 	// Запуск горутины для автоматического бэкапа каждые 30 минут
 	go startBackupRoutine(bot, db)
 
+	// Запуск HTTP-сервера для Render (чтобы не было ошибки Port scan timeout)
+	go startHealthCheckServer()
+
 	ucfg := tgbotapi.NewUpdate(0)
 	ucfg.Timeout = 30
 	updates := bot.GetUpdatesChan(ucfg)
+
+	log.Println("Bot started successfully!")
 
 	for update := range updates {
 		if update.Message != nil {
@@ -63,7 +69,6 @@ func main() {
 					mgr.Reset(update.Message.From.ID)
 					bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Регистрация отменена."))
 				case "backup":
-					// Ручной бэкап по команде (только для админа)
 					if update.Message.Chat.ID == adminChatID {
 						go performBackup(bot, db)
 						bot.Send(tgbotapi.NewMessage(adminChatID, "⏳ Создаю бэкап..."))
@@ -81,12 +86,34 @@ func main() {
 	}
 }
 
+// startHealthCheckServer запускает простой HTTP-сервер для health checks
+func startHealthCheckServer() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "10000" // Render использует порт 10000 по умолчанию
+	}
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "eTriathlon Bot is running! ✅")
+	})
+
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"status":"ok","timestamp":"%s"}`, time.Now().Format(time.RFC3339))
+	})
+
+	log.Printf("Health check server starting on port %s", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		log.Printf("Health check server error: %v", err)
+	}
+}
+
 // startBackupRoutine запускает периодический бэкап каждые 30 минут
 func startBackupRoutine(bot *tgbotapi.BotAPI, db *sql.DB) {
 	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
 
-	// Уведомление о запуске системы бэкапа
 	msg := tgbotapi.NewMessage(adminChatID, "✅ Система автоматического бэкапа запущена\n⏰ Интервал: каждые 30 минут")
 	bot.Send(msg)
 
@@ -95,7 +122,6 @@ func startBackupRoutine(bot *tgbotapi.BotAPI, db *sql.DB) {
 	}
 }
 
-// performBackup создает CSV файл и отправляет его администратору
 func performBackup(bot *tgbotapi.BotAPI, db *sql.DB) {
 	filename := fmt.Sprintf("backup_etriathlon_%s.csv", time.Now().Format("2006-01-02_15-04-05"))
 
@@ -106,9 +132,8 @@ func performBackup(bot *tgbotapi.BotAPI, db *sql.DB) {
 		bot.Send(msg)
 		return
 	}
-	defer os.Remove(filename) // Удаляем файл после отправки
+	defer os.Remove(filename)
 
-	// Отправка файла администратору
 	err = sendBackupFile(bot, filename)
 	if err != nil {
 		log.Printf("Ошибка отправки бэкапа: %v", err)
@@ -120,7 +145,6 @@ func performBackup(bot *tgbotapi.BotAPI, db *sql.DB) {
 	log.Printf("Бэкап успешно отправлен: %s", filename)
 }
 
-// exportToCSV экспортирует данные из базы данных в CSV файл
 func exportToCSV(db *sql.DB, filename string) error {
 	file, err := os.Create(filename)
 	if err != nil {
@@ -131,12 +155,10 @@ func exportToCSV(db *sql.DB, filename string) error {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	// Записываем заголовок файла
 	writer.Write([]string{"=== eTriathlon 2025 - Database Backup ==="})
 	writer.Write([]string{fmt.Sprintf("Generated: %s", time.Now().Format("2006-01-02 15:04:05"))})
 	writer.Write([]string{})
 
-	// Экспорт таблицы users
 	writer.Write([]string{"=== TABLE: users ==="})
 
 	rows, err := db.Query("SELECT id, tg_id, first_name, last_name, class, disciplines FROM users ORDER BY id")
@@ -145,7 +167,6 @@ func exportToCSV(db *sql.DB, filename string) error {
 	}
 	defer rows.Close()
 
-	// Записываем заголовки колонок
 	writer.Write([]string{"ID", "Telegram ID", "Имя", "Фамилия", "Класс", "Дисциплины"})
 
 	rowCount := 0
@@ -161,7 +182,6 @@ func exportToCSV(db *sql.DB, filename string) error {
 			continue
 		}
 
-		// Форматируем дисциплины для читаемости
 		var disciplines map[string]models.GameData
 		disciplinesStr := string(disciplinesJSON)
 		if len(disciplinesJSON) > 0 {
@@ -182,12 +202,10 @@ func exportToCSV(db *sql.DB, filename string) error {
 		rowCount++
 	}
 
-	// Добавляем статистику
 	writer.Write([]string{})
 	writer.Write([]string{fmt.Sprintf("Total registrations: %d", rowCount)})
 	writer.Write([]string{})
 
-	// Статистика по дисциплинам
 	writer.Write([]string{"=== STATISTICS BY DISCIPLINE ==="})
 	stats, err := getStatistics(db)
 	if err == nil {
@@ -199,7 +217,6 @@ func exportToCSV(db *sql.DB, filename string) error {
 	return nil
 }
 
-// formatDisciplines форматирует дисциплины в читаемую строку
 func formatDisciplines(disciplines map[string]models.GameData) string {
 	result := ""
 	for game, data := range disciplines {
@@ -215,7 +232,6 @@ func formatDisciplines(disciplines map[string]models.GameData) string {
 	return result
 }
 
-// getStatistics получает статистику по дисциплинам
 func getStatistics(db *sql.DB) (map[string]int, error) {
 	stats := make(map[string]int)
 
@@ -244,13 +260,11 @@ func getStatistics(db *sql.DB) (map[string]int, error) {
 	return stats, nil
 }
 
-// sendBackupFile отправляет CSV файл администратору
 func sendBackupFile(bot *tgbotapi.BotAPI, filename string) error {
 	file := tgbotapi.NewDocument(adminChatID, tgbotapi.FilePath(filename))
 
-	// Получаем статистику для caption
 	fileInfo, _ := os.Stat(filename)
-	fileSize := float64(fileInfo.Size()) / 1024 // KB
+	fileSize := float64(fileInfo.Size()) / 1024
 
 	file.Caption = fmt.Sprintf(
 		"🔄 Автоматический бэкап базы данных\n"+
