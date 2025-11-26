@@ -68,25 +68,6 @@ func isTriathlonComplete(disciplines map[string]models.GameData) bool {
 	return true
 }
 
-// isPartOfTriathlon проверяет, является ли текущая регистрация частью триатлона
-// func isPartOfTriathlon(s *states.Session) bool {
-// 	// Проверяем состояние
-// 	if s.State == states.TriathlonSelect {
-// 		return true
-// 	}
-
-// 	// Проверяем наличие игр триатлона в дисциплинах
-// 	triathlonGames := []string{"Brawl Stars", "Clash Royale", "Chess"}
-// 	count := 0
-// 	for _, game := range triathlonGames {
-// 		if _, ok := s.Temp.Disciplines[game]; ok {
-// 			count++
-// 		}
-// 	}
-// 	// Если заполнена хотя бы одна игра из триатлона
-// 	return count > 0
-// }
-
 // getTriathlonStatus возвращает текст с текущим статусом заполнения триатлона
 func getTriathlonStatus(disciplines map[string]models.GameData) string {
 	status := "📊 Статус регистрации на Триатлон:\n\n"

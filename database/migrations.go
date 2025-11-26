@@ -14,8 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     first_name TEXT,
     last_name TEXT,
     class TEXT,
-    disciplines JSONB,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    disciplines JSONB
 );
 `)
 	if err != nil {

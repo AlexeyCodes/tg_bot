@@ -1,7 +1,5 @@
 package models
 
-import "time"
-
 type GameData struct {
 	Nick string `json:"nick"`
 	Tag  string `json:"tag"`
@@ -14,5 +12,4 @@ type User struct {
 	LastName    string              `json:"last_name"`
 	Class       string              `json:"class"`
 	Disciplines map[string]GameData `json:"disciplines"`
-	CreatedAt   time.Time           `json:"created_at"`
 }
