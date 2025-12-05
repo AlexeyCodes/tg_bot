@@ -12,6 +12,6 @@ func HandleStart(bot *tgbotapi.BotAPI, mgr *states.Manager, update tgbotapi.Upda
 	mgr.Reset(userID)
 	mgr.SetState(userID, states.WaitingName)
 
-	msg := tgbotapi.NewMessage(chatID, "🎮 Добро пожаловать на регистрацию eTriathlon 2025!\n\nТурнир включает три дисциплины:\n• Brawl Stars\n• Clash Royale\n• Chess (Шахматы)\n\nДля регистрации введите ваши данные.\n\nВведите ваше имя:")
+	msg := tgbotapi.NewMessage(chatID, "🎮 Добро пожаловать на регистрацию eTriathlon 2026!\n\nТурнир включает три игры:\n• Brawl Stars\n• Clash Royale\n• Chess (Шахматы)\n\nДля регистрации введите ваши данные.\n\nВведите ваше имя:")
 	bot.Send(msg)
 }
